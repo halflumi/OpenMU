@@ -227,12 +227,35 @@ public class DefaultDropGenerator : IDropGenerator
     /// <returns>A random excellent item.</returns>
     protected Item? GenerateRandomExcellentItem(int monsterLvl)
     {
+#if DOWNSTREAM
+        // In an excellent-only config, items that can't be excellent also get affected by the 25-level penalty of excellent drops.
+        // Instead of rolling at -25 level, join the non-excellent-able items at the monster level and excellent-able items at -25 levels for a roll.
+        // Also, instead of making nothing drop below level 25, monster of level <= 37 has an increasing chance of dropping level 1~12 excellent items.
+        static bool CanBeExcellent(ItemDefinition definition) => definition.PossibleItemOptions.Any(o => o.PossibleOptions.Any(p => p.OptionType == ItemOptionTypes.Excellent));
+
+        var possibleCommon = this.GetPossibleList(monsterLvl)?.Where(def => !CanBeExcellent(def)).ToList();
+
+        IList<ItemDefinition>? possibleEx = null;
+        if (monsterLvl >= 37)
+        {
+            possibleEx = this.GetPossibleList(monsterLvl - 25)?.Where(CanBeExcellent).ToList();
+        }
+        else if (this._randomizer.NextInt(0, 37) < monsterLvl) // n/37 chance to drop an excellent item.
+        {
+            possibleEx = this.GetPossibleList(12)?.Where(CanBeExcellent).ToList();
+        }
+
+        List<ItemDefinition> possible = new(64);
+        possible.AddRange(possibleCommon ?? Enumerable.Empty<ItemDefinition>());
+        possible.AddRange(possibleEx ?? Enumerable.Empty<ItemDefinition>());
+#else
         if (monsterLvl < 25)
         {
             return null;
         }
 
         var possible = this.GetPossibleList(monsterLvl - 25);
+#endif
         var item = this.GenerateRandomItem(possible);
         if (item is null)
         {
