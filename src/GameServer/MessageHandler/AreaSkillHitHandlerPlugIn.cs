@@ -56,12 +56,14 @@ internal class AreaSkillHitHandlerPlugIn : IPacketHandlerPlugIn
             for (int i = 0; i < targetCount; i++)
             {
                 var targetInfo = message[i];
+#if !DOWNSTREAM
                 var (isHitValid, increaseCounter) = player.SkillHitValidator.IsHitValid(skillId, targetInfo.AnimationCounter, message.HitCounter);
                 increaseCounterAfterLoop |= increaseCounter;
                 if (!isHitValid)
                 {
                     return;
                 }
+#endif
 
                 if (player.GetObject(targetInfo.TargetId) is IAttackable target)
                 {
