@@ -81,7 +81,11 @@ public class DefaultDropGenerator : IDropGenerator
         IList<Item>? droppedItems = null;
         for (int i = 0; i < monster.NumberOfMaximumItemDrops; i++)
         {
+#if DOWNSTREAM
+            var group = this.SelectRandomGroup(this._dropGroups, totalChance, monster[Stats.Level]);
+#else
             var group = this.SelectRandomGroup(this._dropGroups, totalChance);
+#endif
             if (group is null)
             {
                 continue;
@@ -426,8 +430,30 @@ public class DefaultDropGenerator : IDropGenerator
         }
     }
 
+#if DOWNSTREAM
+    private DropItemGroup? SelectRandomGroup(IEnumerable<DropItemGroup> groups, double totalChance, float? monsterLvl = null)
+#else
     private DropItemGroup? SelectRandomGroup(IEnumerable<DropItemGroup> groups, double totalChance)
+#endif
     {
+#if DOWNSTREAM
+        // Give Jewels higher drop rates, proportional to the monster level.
+        // Formula: f(x, m) = 9 * ((x - m) / (148 - m))^2
+        double GetBonusChance(DropItemGroup group)
+        {
+            if (!group.Description.StartsWith("The Jewel") || monsterLvl is not { } lvl)
+            {
+                return 0.0;
+            }
+
+            double min_drop_level = group.MinimumMonsterLevel ?? 0.0;
+            double normalization = (lvl - min_drop_level) / (148.0 - min_drop_level);
+            return group.Chance * (9.0 * Math.Pow(normalization, 2.0));
+        }
+
+        totalChance += groups.Sum(GetBonusChance);
+#endif
+
         var lot = this._randomizer.NextDouble();
         if (totalChance > 1.0)
         {
@@ -436,10 +462,18 @@ public class DefaultDropGenerator : IDropGenerator
 
         foreach (var group in groups)
         {
+#if DOWNSTREAM
+            var calibedChance = group.Chance + GetBonusChance(group);
+            if (lot > calibedChance)
+            {
+                lot -= calibedChance;
+            }
+#else
             if (lot > group.Chance)
             {
                 lot -= group.Chance;
             }
+#endif
             else
             {
                 return group;
