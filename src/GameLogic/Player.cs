@@ -993,13 +993,28 @@ public class Player : AsyncDisposable, IBucketMapObserver, IAttackable, IAttacke
     /// </summary>
     /// <param name="experience">The experience which should be added.</param>
     /// <param name="killedObject">The killed object which caused the experience gain.</param>
+#if DOWNSTREAM
+    public async ValueTask AddExperienceAsync(int experience, IAttackable? killedObject, bool calcRemaining = false)
+#else
     public async ValueTask AddExperienceAsync(int experience, IAttackable? killedObject)
+#endif
     {
         if (this.Attributes![Stats.Level] >= this.GameContext.Configuration.MaximumLevel)
         {
             await this.InvokeViewPlugInAsync<IShowMessagePlugIn>(p => p.ShowMessageAsync("You already reached maximum Level.", MessageType.BlueNormal)).ConfigureAwait(false);
             return;
         }
+
+#if DOWNSTREAM
+        // Smooth out early level-ups by reducing exp gains at early levels.
+        // Exp rate starts with 1 at level 1 and maxes out at level 80. Only affects the global exp rate.
+        if (!calcRemaining)
+        {
+            float originalRate = this.GameContext.Configuration.ExperienceRate;
+            float calibratedRate = (1 / originalRate) + ((1 - (1 / originalRate)) * (this.Attributes[Stats.Level] / 80.0f));
+            experience = (int)(experience * calibratedRate);
+        }
+#endif
 
         long exp = experience;
         bool isLevelUp = false;
@@ -1032,7 +1047,11 @@ public class Player : AsyncDisposable, IBucketMapObserver, IAttackable, IAttacke
             var remainingExp = experience - exp;
             if (remainingExp > 0 && this.Attributes![Stats.Level] < this.GameContext.Configuration.MaximumLevel)
             {
+#if DOWNSTREAM
+                await this.AddExperienceAsync((int)remainingExp, killedObject, true).ConfigureAwait(false);
+#else
                 await this.AddExperienceAsync((int)remainingExp, killedObject).ConfigureAwait(false);
+#endif
             }
         }
     }
