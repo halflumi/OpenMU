@@ -221,6 +221,39 @@ public sealed class Party : Disposable
         }
     }
 
+#if DOWNSTREAM
+    /// <summary>
+    /// Gets the character classes in the party that participate in a kill.
+    /// </summary>
+    /// <param name="killer">The killer.</param>
+    /// <returns>The list of <see cref="CharacterClass"/> which should be considered when generating a drop.</returns>
+    public async ValueTask<IList<CharacterClass>> GetCharacterClassesAsync(IPartyMember killer)
+    {
+        using var _ = await this._distributionLock.LockAsync();
+        try
+        {
+            using (await killer.ObserverLock.ReaderLockAsync().ConfigureAwait(false))
+            {
+                this._distributionList.AddRange(
+                    this.PartyList.OfType<Player>()
+                        .Where(p => p.CurrentMap == killer.CurrentMap
+                                    && !p.IsAtSafezone()
+                                    && p.IsAlive
+                                    && (p == killer || killer.Observers.Contains(p))));
+            }
+
+            return this._distributionList
+                .Where(member => member.SelectedCharacter != null)
+                .Select(member => member.SelectedCharacter!.CharacterClass!)
+                .ToList();
+        }
+        finally
+        {
+            this._distributionList.Clear();
+        }
+    }
+#endif
+
     /// <inheritdoc/>
     protected override void Dispose(bool disposing)
     {

@@ -91,7 +91,11 @@ public class DefaultDropGenerator : IDropGenerator
                 continue;
             }
 
+#if DOWNSTREAM
+            var item = this.GenerateItemDropOrMoney(monster, group, gainedExperience, await GetPartyCharacterClassesAsync(player).ConfigureAwait(false), out var droppedMoney);
+#else
             var item = this.GenerateItemDropOrMoney(monster, group, gainedExperience, out var droppedMoney);
+#endif
             if (item is not null)
             {
                 droppedItems ??= new List<Item>(1);
@@ -229,7 +233,11 @@ public class DefaultDropGenerator : IDropGenerator
     /// </summary>
     /// <param name="monsterLvl">The monster level.</param>
     /// <returns>A random excellent item.</returns>
+#if DOWNSTREAM
+    protected Item? GenerateRandomExcellentItem(int monsterLvl, ICollection<CharacterClass> classes)
+#else
     protected Item? GenerateRandomExcellentItem(int monsterLvl)
+#endif
     {
 #if DOWNSTREAM
         // In an excellent-only config, items that can't be excellent also get affected by the 25-level penalty of excellent drops.
@@ -249,9 +257,11 @@ public class DefaultDropGenerator : IDropGenerator
             possibleEx = this.GetPossibleList(12)?.Where(CanBeExcellent).ToList();
         }
 
+        bool Suitable(ItemDefinition definition) => definition.QualifiedCharacters.Count == 0 || classes.Count == 0 || definition.QualifiedCharacters.Intersect(classes).Any();
+
         List<ItemDefinition> possible = new(64);
-        possible.AddRange(possibleCommon ?? Enumerable.Empty<ItemDefinition>());
-        possible.AddRange(possibleEx ?? Enumerable.Empty<ItemDefinition>());
+        possible.AddRange(possibleCommon?.Where(Suitable) ?? Enumerable.Empty<ItemDefinition>());
+        possible.AddRange(possibleEx?.Where(Suitable) ?? Enumerable.Empty<ItemDefinition>());
 #else
         if (monsterLvl < 25)
         {
@@ -335,6 +345,23 @@ public class DefaultDropGenerator : IDropGenerator
         return true;
     }
 
+#if DOWNSTREAM
+    private static async ValueTask<ICollection<CharacterClass>> GetPartyCharacterClassesAsync(Player player)
+    {
+        if (player.SelectedCharacter is not { } character)
+        {
+            return new List<CharacterClass>();
+        }
+
+        if (player.Party is { } party)
+        {
+            return await party.GetCharacterClassesAsync(player).ConfigureAwait(false);
+        }
+
+        return new List<CharacterClass> { character.CharacterClass! };
+    }
+#endif
+
     private Item? GenerateRandomItem(ICollection<ItemDefinition>? possibleItems)
     {
         if (possibleItems is null || !possibleItems.Any())
@@ -403,7 +430,11 @@ public class DefaultDropGenerator : IDropGenerator
         }
     }
 
+#if DOWNSTREAM
+    private Item? GenerateItemDropOrMoney(MonsterDefinition monster, DropItemGroup selectedGroup, int gainedExperience, ICollection<CharacterClass> classes, out uint? droppedMoney)
+#else
     private Item? GenerateItemDropOrMoney(MonsterDefinition monster, DropItemGroup selectedGroup, int gainedExperience, out uint? droppedMoney)
+#endif
     {
         droppedMoney = null;
         if (selectedGroup.PossibleItems?.Count > 0)
@@ -416,7 +447,11 @@ public class DefaultDropGenerator : IDropGenerator
             case SpecialItemType.Ancient:
                 return this.GenerateRandomAncient();
             case SpecialItemType.Excellent:
+#if DOWNSTREAM
+                return this.GenerateRandomExcellentItem((int)monster[Stats.Level], classes);
+#else
                 return this.GenerateRandomExcellentItem((int)monster[Stats.Level]);
+#endif
             case SpecialItemType.RandomItem:
                 return this.GenerateRandomItem((int)monster[Stats.Level], false);
             case SpecialItemType.SocketItem:
