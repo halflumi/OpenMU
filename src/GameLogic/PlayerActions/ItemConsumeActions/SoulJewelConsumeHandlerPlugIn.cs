@@ -65,6 +65,9 @@ public class SoulJewelConsumeHandlerPlugIn : ItemModifyConsumeHandlerPlugIn
             return true; // true doesn't mean that it was successful, just that the consumption happened.
         }
 
+#if DOWNSTREAM
+        item.Level = (byte)Math.Max(item.Level - 1, 0);
+#else
         if (item.Level > 6)
         {
             item.Level = 0;
@@ -73,6 +76,7 @@ public class SoulJewelConsumeHandlerPlugIn : ItemModifyConsumeHandlerPlugIn
         {
             item.Level = (byte)Math.Max(item.Level - 1, 0);
         }
+#endif
 
         return true;
     }
